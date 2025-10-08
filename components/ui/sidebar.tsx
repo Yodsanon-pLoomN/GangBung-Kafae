@@ -12,7 +12,8 @@ export default function Sidebar({ activeTab, onTabChange }: SidebarProps) {
   const menuItems = [
     { id: 'items', label: 'รายการ', icon: Package },
     { id: 'stock', label: 'สต๊อกสินค้า', icon: Coffee },
-    { id: 'menu', label: 'เมนู', icon: Menu }
+    { id: 'menu', label: 'เมนู', icon: Menu },
+    { id: 'order', label: 'รายการสั่งซื้อ', icon: Menu }
   ];
 
   return (

@@ -1,84 +1,94 @@
-// lib/data.ts
-export interface Ingredient {
-  name: string;
-  amount: string;
-  unit: string;
-}
-
-export interface Drink {
+// Location
+export interface Location {
   id: number;
-  name: string;
-  category: string;
-  ingredients: Ingredient[];
-  price?: number;
+  location: string;
 }
 
-export interface StockItem {
+// Ingredient
+export interface Ingredient {
   id: number;
   name: string;
   stockQty: number;
   unit: string;
+  location?: Location | null;
 }
 
-export const drinks: Drink[] = [
-  {
-    id: 1,
-    name: 'เอสเปรสโซ',
-    category: 'กาแฟ',
-    ingredients: [
-      { name: 'เมล็ดกาแฟ', amount: '18', unit: 'กรัม' },
-      { name: 'น้ำ', amount: '30', unit: 'มล.' }
-    ]
-  },
-  {
-    id: 2,
-    name: 'ลาเต้',
-    category: 'กาแฟ',
-    ingredients: [
-      { name: 'เมล็ดกาแฟ', amount: '18', unit: 'กรัม' },
-      { name: 'นม', amount: '200', unit: 'มล.' },
-      { name: 'น้ำ', amount: '30', unit: 'มล.' }
-    ]
-  },
-  {
-    id: 3,
-    name: 'ชาเขียว',
-    category: 'ชา',
-    ingredients: [
-      { name: 'ชาเขียว', amount: '5', unit: 'กรัม' },
-      { name: 'น้ำ', amount: '250', unit: 'มล.' },
-      { name: 'น้ำตาล', amount: '10', unit: 'กรัม' }
-    ]
-  },
-  {
-    id: 4,
-    name: 'คาปูชิโน่',
-    category: 'กาแฟ',
-    ingredients: [
-      { name: 'เมล็ดกาแฟ', amount: '18', unit: 'กรัม' },
-      { name: 'นม', amount: '150', unit: 'มล.' },
-      { name: 'น้ำ', amount: '30', unit: 'มล.' }
-    ]
-  },
-  {
-    id: 5,
-    name: 'ชาไทย',
-    category: 'ชา',
-    ingredients: [
-      { name: 'ชาไทย', amount: '8', unit: 'กรัม' },
-      { name: 'น้ำ', amount: '200', unit: 'มล.' },
-      { name: 'นม', amount: '100', unit: 'มล.' },
-      { name: 'น้ำตาล', amount: '20', unit: 'กรัม' }
-    ]
-  },
-  {
-    id: 6,
-    name: 'อเมริกาโน่',
-    category: 'กาแฟ',
-    ingredients: [
-      { name: 'เมล็ดกาแฟ', amount: '18', unit: 'กรัม' },
-      { name: 'น้ำ', amount: '200', unit: 'มล.' }
-    ]
-  }
-];
+// Recipe Ingredient (junction between recipe and ingredient)
+export interface RecipeIngredient {
+  id: number;
+  ingredient: Ingredient;
+  ingredientAmount: number;
+}
 
+// Recipe (represents one sweetness level variant)
+export interface Recipe {
+  id: number;
+  sweetLevel: string;
+  ingredients: RecipeIngredient[];
+}
+
+// Menu
+export interface Menu {
+  id: number;
+  name: string;
+  price: number;
+  recipe: Recipe[]; // รายการสูตรที่เป็นไปได้ของเมนูนี้
+}
+
+// Order Item
+export interface OrderItem {
+  id: number;
+  qty: number;
+
+  // ในบาง response เก่ายังไม่มี menu
+  menu?: Menu;
+
+  // เพิ่ม: สูตรที่ถูกเลือกจริงในออเดอร์นี้
+  // หมายเหตุ: บางกรณี GET เก่าอาจไม่มี ส่งให้ optional ไว้
+  recipe?: Recipe;
+}
+
+// Order
+export interface Order {
+  id: number;
+  createdAt: string; // ISO
+  orderItems: OrderItem[];
+}
+
+/* ===== Request Body Types ===== */
+
+// For POST Ingredient
+export interface CreateIngredientRequest {
+  name: string;
+  stockQty: number;
+  unit: string;
+  location?: { location: string };
+}
+
+// For POST Menu
+export interface CreateMenuRequest {
+  name: string;
+  price: number;
+  recipe: {
+    sweetLevel: string;
+    ingredients: {
+      ingredientAmount: number;
+      ingredient: { id: number };
+    }[];
+  }[];
+}
+
+// For POST Order (อัปเดตให้รับ recipe.id ต่อรายการ)
+export interface CreateOrderRequest {
+  orderItems: {
+    qty: number;
+    menu: { id: number };
+
+    // ใหม่: บังคับให้ระบุ recipe ที่เลือก
+    recipe: { id: number };
+  }[];
+}
+
+/* ===== Backward compatibility aliases (คงไว้ได้) ===== */
+export type StockItem = Ingredient;
+export type MenuItem = Menu;
