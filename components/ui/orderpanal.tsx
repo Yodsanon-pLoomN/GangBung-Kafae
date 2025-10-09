@@ -102,19 +102,23 @@ const OrderPanel = forwardRef<OrderPanelRef, OrderPanelProps>(({ onOrderSuccess 
     try {
       // จัดกลุ่มรายการตาม menuId
       const groupedItems = orderItems.reduce((acc, item) => {
-        const existingItem = acc.find(i => i.menuId === item.menuId);
-        if (existingItem) {
-          existingItem.quantity += item.quantity;
-        } else {
-          acc.push({
-            menuId: item.menuId,
-            quantity: item.quantity,
-            recipeId: item.recipeId
-          });
-        }
-        return acc;
-      }, [] as {
-        recipeId: number; menuId: number; quantity: number
+  const existingItem = acc.find(
+    i => i.menuId === item.menuId && i.recipeId === item.recipeId
+  );
+  if (existingItem) {
+    existingItem.quantity += item.quantity;
+  } else {
+    acc.push({
+      menuId: item.menuId,
+      recipeId: item.recipeId,
+      quantity: item.quantity
+    });
+  }
+  return acc;
+}, [] as {
+  recipeId: number;
+  menuId: number;
+  quantity: number;
 }[]);
 
       const requestBody: CreateOrderRequest = {
