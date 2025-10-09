@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'ระบบสต๊อกสินค้าเครื่องดื่ม',
+  title: 'KangBung Kafae',
   description: 'ระบบจัดการสต๊อกและเมนูเครื่องดื่ม',
 };
 

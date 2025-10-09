@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Package, Coffee, Menu } from 'lucide-react';
+import { Package, Coffee ,Book,CookingPot} from 'lucide-react';
 
 interface SidebarProps {
   activeTab: string;
@@ -11,16 +11,16 @@ interface SidebarProps {
 export default function Sidebar({ activeTab, onTabChange }: SidebarProps) {
   const menuItems = [
     { id: 'items', label: 'รายการ', icon: Package },
-    { id: 'stock', label: 'สต๊อกสินค้า', icon: Coffee },
-    { id: 'menu', label: 'เมนู', icon: Menu },
-    { id: 'order', label: 'รายการสั่งซื้อ', icon: Menu }
+    { id: 'stock', label: 'วัตถุดิบ', icon: CookingPot },
+    { id: 'menu', label: 'เมนู', icon: Coffee },
+    { id: 'order', label: 'รายการสั่งซื้อ', icon: Book }
   ];
 
   return (
     <div className="w-64 bg-white shadow-lg border-r border-gray-200">
       <div className="p-6 border-b border-gray-200">
-        <h1 className="text-2xl font-bold text-blue-600">KangBung</h1>
-        <p className="text-sm text-gray-500 mt-1">Kafee</p>
+        <h1 className="text-2xl font-bold text-blue-600">GangBung</h1>
+        <p className="text-sm text-gray-500 mt-1">Kafae</p>
       </div>
       
       <nav className="p-4">

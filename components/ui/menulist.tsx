@@ -12,10 +12,10 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import DialogCreateMenu from '@/components/ui/dialogcreatemenu';
 import {
   Select,
   SelectContent,
@@ -24,15 +24,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-interface FormIngredient {
-  ingredientId: string;
-  amount: string;
-}
-
-interface FormRecipe {
-  sweetLevel: string;
-  ingredients: FormIngredient[];
-}
+/* ------- ชนิดข้อมูลสำหรับฟอร์มแก้ไข ------- */
+type EditFormIngredient = { ingredientId: string; amount: string };
+type EditFormRecipe = { sweetLevel: string; ingredients: EditFormIngredient[] };
 
 export default function MenuList() {
   const [items, setItems] = useState<Menu[]>([]);
@@ -42,29 +36,18 @@ export default function MenuList() {
   const [selectedItem, setSelectedItem] = useState<Menu | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Edit dialog state
+  // แก้ไข (ตอนนี้ให้แก้สูตรและส่วนผสมได้ด้วย)
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<Menu | null>(null);
   const [editName, setEditName] = useState('');
   const [editPrice, setEditPrice] = useState<string>('0');
+  const [editRecipes, setEditRecipes] = useState<EditFormRecipe[]>([]);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Delete confirm dialog
+  // ลบ
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Menu | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-
-  const [formData, setFormData] = useState({
-    name: '',
-    price: '',
-  });
-
-  const [formRecipes, setFormRecipes] = useState<FormRecipe[]>([
-    {
-      sweetLevel: 'หวานน้อย',
-      ingredients: [{ ingredientId: '', amount: '' }]
-    }
-  ]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -111,134 +94,42 @@ export default function MenuList() {
     }
   };
 
-  /* ---------------- Create (POST) ---------------- */
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    try {
-      const menuData: CreateMenuRequest = {
-        name: formData.name,
-        price: parseFloat(formData.price),
-        recipe: formRecipes.map(recipe => ({
-          sweetLevel: recipe.sweetLevel,
-          ingredients: recipe.ingredients
-            .filter(ing => ing.ingredientId && ing.amount)
-            .map(ing => ({
-              ingredientAmount: parseFloat(ing.amount),
-              ingredient: { id: parseInt(ing.ingredientId) }
-            }))
-        }))
-      };
-
-      const response = await api.post('/api/gangbung/menu', menuData);
-
-      const newItem: Menu = Array.isArray(response.data)
-        ? response.data[0]
-        : response.data;
-
-      setItems([...items, newItem]);
-
-      // Reset form and close dialog
-      setFormData({ name: '', price: '' });
-      setFormRecipes([
-        {
-          sweetLevel: 'หวานน้อย',
-          ingredients: [{ ingredientId: '', amount: '' }]
-        }
-      ]);
-      setIsAddOpen(false);
-    } catch (error) {
-      console.error('Error adding menu:', error);
-      alert('เกิดข้อผิดพลาดในการเพิ่มเมนู');
-    }
-  };
-
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value
-    });
-  };
-
-  const handleRecipeSweetLevelChange = (recipeIndex: number, value: string) => {
-    const newRecipes = [...formRecipes];
-    newRecipes[recipeIndex].sweetLevel = value;
-    setFormRecipes(newRecipes);
-  };
-
-  const handleIngredientChange = (recipeIndex: number, ingredientIndex: number, field: 'ingredientId' | 'amount', value: string) => {
-    const newRecipes = [...formRecipes];
-    newRecipes[recipeIndex].ingredients[ingredientIndex][field] = value;
-    setFormRecipes(newRecipes);
-  };
-
-  const addIngredient = (recipeIndex: number) => {
-    const newRecipes = [...formRecipes];
-    newRecipes[recipeIndex].ingredients.push({ ingredientId: '', amount: '' });
-    setFormRecipes(newRecipes);
-  };
-
-  const removeIngredient = (recipeIndex: number, ingredientIndex: number) => {
-    const newRecipes = [...formRecipes];
-    if (newRecipes[recipeIndex].ingredients.length > 1) {
-      newRecipes[recipeIndex].ingredients = newRecipes[recipeIndex].ingredients.filter((_, i) => i !== ingredientIndex);
-      setFormRecipes(newRecipes);
-    }
-  };
-
-  const addRecipe = () => {
-    setFormRecipes([
-      ...formRecipes,
-      {
-        sweetLevel: 'หวานน้อย',
-        ingredients: [{ ingredientId: '', amount: '' }]
-      }
-    ]);
-  };
-
-  const removeRecipe = (recipeIndex: number) => {
-    if (formRecipes.length > 1) {
-      setFormRecipes(formRecipes.filter((_, i) => i !== recipeIndex));
-    }
-  };
-
-  const getIngredientUnit = (ingredientId: string) => {
-    const ingredient = ingredients.find(ing => ing.id === parseInt(ingredientId));
-    return ingredient?.unit || '';
-  };
-
-  const handleRowClick = (item: Menu) => {
-    setSelectedItem(item);
-    setIsDetailOpen(true);
-  };
-
-  const sweetLevelOptions = ['หวานน้อย', 'หวานกลาง', 'หวานมาก', 'ไม่หวาน'];
-
   /* ---------------- Edit (PUT) ---------------- */
 
-  // สร้าง payload PUT โดยส่ง recipes เดิม (จาก item ใน state) กลับไปด้วย
-  const buildMenuPutPayload = (base: Menu, newName: string, newPrice: number): CreateMenuRequest => {
-    return {
-      name: newName,
-      price: newPrice,
-      recipe: base.recipe.map(r => ({
-        sweetLevel: r.sweetLevel,
-        ingredients: r.ingredients.map(ri => ({
-          ingredientAmount: ri.ingredientAmount,
-          ingredient: { id: ri.ingredient.id }
-        }))
-      }))
-    };
-    // หมายเหตุ: ฝั่ง backend จะใช้ path PUT /api/gangbung/menu/{id}
-    // และ map ข้อมูลตามโมเดลของคุณ
-  };
-
-  const openEdit = (menu: Menu, e?: React.MouseEvent) => {
-    if (e) e.stopPropagation(); // กันไม่ให้เปิด detail dialog
-    setEditTarget(menu);
+  // แปลงข้อมูล Menu เดิม -> ฟอร์มแก้ไข (สามารถพิมพ์ชื่อสูตรเองได้)
+  const primeEditFormFromMenu = (menu: Menu) => {
     setEditName(menu.name);
     setEditPrice(String(menu.price ?? 0));
+    setEditRecipes(
+      (menu.recipe || []).map(r => ({
+        sweetLevel: r.sweetLevel || '',
+        ingredients: (r.ingredients || []).map(ri => ({
+          ingredientId: String(ri.ingredient.id),
+          amount: String(ri.ingredientAmount)
+        }))
+      }))
+    );
+  };
+
+  // สร้าง payload PUT จากฟอร์มแก้ไข
+  const buildMenuPutPayload = (name: string, priceNum: number, recipes: EditFormRecipe[]): CreateMenuRequest => ({
+    name,
+    price: priceNum,
+    recipe: recipes.map(r => ({
+      sweetLevel: r.sweetLevel.trim(),
+      ingredients: r.ingredients
+        .filter(ing => ing.ingredientId && ing.amount !== '')
+        .map(ing => ({
+          ingredientAmount: parseFloat(ing.amount),
+          ingredient: { id: parseInt(ing.ingredientId) }
+        }))
+    }))
+  });
+
+  const openEdit = (menu: Menu, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setEditTarget(menu);
+    primeEditFormFromMenu(menu);
     setIsEditOpen(true);
   };
 
@@ -254,16 +145,33 @@ export default function MenuList() {
       alert('ราคาต้องเป็นตัวเลขและไม่ติดลบ');
       return;
     }
+    // ตรวจสูตรว่าง
+    const hasAtLeastOneIngredient = editRecipes.some(r =>
+      r.sweetLevel.trim() &&
+      r.ingredients.some(ing => ing.ingredientId && parseFloat(ing.amount || '0') > 0)
+    );
+    if (!hasAtLeastOneIngredient) {
+      alert('ต้องมีอย่างน้อย 1 สูตรที่ระบุส่วนผสมถูกต้อง');
+      return;
+    }
 
     setIsSaving(true);
     try {
-      const body = buildMenuPutPayload(editTarget, editName.trim(), priceNum);
-      await api.put(`/api/gangbung/menu/${editTarget.id}`, body);
+      const body = buildMenuPutPayload(editName.trim(), priceNum, editRecipes);
+      const res = await api.put(`/api/gangbung/menu/${editTarget.id}`, body);
 
-      // อัปเดต state ทันที
-      setItems(prev =>
-        prev.map(m => (m.id === editTarget.id ? { ...m, name: editName.trim(), price: priceNum } : m))
-      );
+   // หลัง await api.put(...)
+const updatedMenu: Menu = Array.isArray(res.data) ? res.data[0] : res.data;
+
+if (updatedMenu && updatedMenu.id) {
+  // มี payload ที่ complete -> อัปเดตตรง ๆ
+  setItems(prev =>
+    prev.map(m => (m.id === updatedMenu.id ? updatedMenu : m))
+  );
+} else {
+  // ไม่ได้เมนูตัวใหม่ (หรือ payload ไม่ครบ) -> รีเฟรชจาก backend แทน
+  await refreshMenus();
+}
 
       setIsEditOpen(false);
       setEditTarget(null);
@@ -278,7 +186,7 @@ export default function MenuList() {
   /* ---------------- Delete (DELETE) ---------------- */
 
   const openDelete = (menu: Menu, e?: React.MouseEvent) => {
-    if (e) e.stopPropagation(); // กันไม่ให้เปิด detail dialog
+    if (e) e.stopPropagation();
     setDeleteTarget(menu);
     setIsDeleteOpen(true);
   };
@@ -299,6 +207,57 @@ export default function MenuList() {
     }
   };
 
+  const handleRowClick = (item: Menu) => {
+    setSelectedItem(item);
+    setIsDetailOpen(true);
+  };
+
+  /* ---------------- handlers ฟอร์มแก้สูตร ---------------- */
+
+  const addRecipe = () =>
+    setEditRecipes(prev => [...prev, { sweetLevel: '', ingredients: [{ ingredientId: '', amount: '' }] }]);
+
+  const removeRecipe = (idx: number) =>
+    setEditRecipes(prev => (prev.length > 1 ? prev.filter((_, i) => i !== idx) : prev));
+
+  const changeRecipeName = (idx: number, value: string) =>
+    setEditRecipes(prev => {
+      const next = [...prev];
+      next[idx].sweetLevel = value;
+      return next;
+    });
+
+  const addIngredientToRecipe = (rIdx: number) =>
+    setEditRecipes(prev => {
+      const next = [...prev];
+      next[rIdx].ingredients.push({ ingredientId: '', amount: '' });
+      return next;
+    });
+
+  const removeIngredientFromRecipe = (rIdx: number, iIdx: number) =>
+    setEditRecipes(prev => {
+      const next = [...prev];
+      if (next[rIdx].ingredients.length > 1) {
+        next[rIdx].ingredients = next[rIdx].ingredients.filter((_, j) => j !== iIdx);
+      }
+      return next;
+    });
+
+  const changeIngredientField = (
+    rIdx: number,
+    iIdx: number,
+    field: 'ingredientId' | 'amount',
+    value: string
+  ) =>
+    setEditRecipes(prev => {
+      const next = [...prev];
+      next[rIdx].ingredients[iIdx][field] = value;
+      return next;
+    });
+
+  const getIngredientUnit = (ingredientId: string) =>
+    ingredients.find(i => i.id === parseInt(ingredientId))?.unit || '';
+
   return (
     <div className="p-6 overflow-y-auto">
       {/* Header with Add Button */}
@@ -306,196 +265,12 @@ export default function MenuList() {
         <h2 className="text-2xl font-bold text-gray-800">เมนู</h2>
         <div className="flex items-center gap-2">
           <Button variant="outline" onClick={refreshMenus}>รีเฟรช</Button>
-          {/* Add Menu Dialog */}
-          <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-            <DialogTrigger asChild>
-              <Button className="flex items-center gap-2">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
-                เพิ่มเมนู
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm=max-w-[700px] sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>เพิ่มเมนูใหม่</DialogTitle>
-                <DialogDescription>
-                  กรอกข้อมูลเมนูและสูตรส่วนผสม คลิกบันทึกเมื่อเสร็จสิ้น
-                </DialogDescription>
-              </DialogHeader>
-
-              <div className="grid gap-6 py-4">
-                {/* Menu Info */}
-                <div className="space-y-4">
-                  <div className="grid gap-3">
-                    <Label htmlFor="name">ชื่อเมนู</Label>
-                    <Input
-                      id="name"
-                      name="name"
-                      value={formData.name}
-                      onChange={handleInputChange}
-                      placeholder="เช่น Americano, Latte"
-                    />
-                  </div>
-
-                  <div className="grid gap-3">
-                    <Label htmlFor="price">ราคา (บาท)</Label>
-                    <Input
-                      id="price"
-                      name="price"
-                      type="number"
-                      value={formData.price}
-                      onChange={handleInputChange}
-                      placeholder="0"
-                      min="0"
-                      step="1"
-                    />
-                  </div>
-                </div>
-
-                {/* Recipes Section */}
-                <div className="border-t pt-4">
-                  <div className="flex justify-between items-center mb-4">
-                    <Label className="text-lg font-bold">สูตร (ระดับความหวาน)</Label>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={addRecipe}
-                    >
-                      <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                      </svg>
-                      เพิ่มสูตร
-                    </Button>
-                  </div>
-
-                  <div className="space-y-6">
-                    {formRecipes.map((recipe, recipeIndex) => (
-                      <div key={recipeIndex} className="p-4 border rounded-lg bg-gray-50">
-                        <div className="flex justify-between items-center mb-4">
-                          <h3 className="font-semibold text-gray-700">สูตรที่ {recipeIndex + 1}</h3>
-                          {formRecipes.length > 1 && (
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => removeRecipe(recipeIndex)}
-                              className="text-red-500 hover:text-red-700"
-                            >
-                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                              </svg>
-                            </Button>
-                          )}
-                        </div>
-
-                        <div className="grid gap-3 mb-4">
-                          <Label htmlFor={`sweetLevel-${recipeIndex}`}>ระดับความหวาน</Label>
-                          <Select
-                            value={recipe.sweetLevel}
-                            onValueChange={(value) => handleRecipeSweetLevelChange(recipeIndex, value)}
-                          >
-                            <SelectTrigger id={`sweetLevel-${recipeIndex}`}>
-                              <SelectValue placeholder="เลือกระดับความหวาน" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {['หวานน้อย', 'หวานกลาง', 'หวานมาก', 'ไม่หวาน'].map((level) => (
-                                <SelectItem key={level} value={level}>
-                                  {level}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-
-                        {/* Ingredients */}
-                        <div>
-                          <div className="flex justify-between items-center mb-3">
-                            <Label className="text-sm font-semibold">ส่วนผสม</Label>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => addIngredient(recipeIndex)}
-                            >
-                              <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                              </svg>
-                              เพิ่มวัตถุดิบ
-                            </Button>
-                          </div>
-
-                          <div className="space-y-3">
-                            {recipe.ingredients.map((formIng, ingredientIndex) => (
-                              <div key={ingredientIndex} className="flex gap-2 items-end">
-                                <div className="flex-1 grid gap-2">
-                                  <Label htmlFor={`ingredient-${recipeIndex}-${ingredientIndex}`} className="text-xs">
-                                    วัตถุดิบ
-                                  </Label>
-                                  <Select
-                                    value={formIng.ingredientId}
-                                    onValueChange={(value) => handleIngredientChange(recipeIndex, ingredientIndex, 'ingredientId', value)}
-                                  >
-                                    <SelectTrigger id={`ingredient-${recipeIndex}-${ingredientIndex}`}>
-                                      <SelectValue placeholder="เลือกวัตถุดิบ" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      {ingredients.map((ing) => (
-                                        <SelectItem key={ing.id} value={ing.id.toString()}>
-                                          {ing.name} (คงเหลือ: {ing.stockQty} {ing.unit})
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                </div>
-
-                                <div className="w-28 grid gap-2">
-                                  <Label htmlFor={`amount-${recipeIndex}-${ingredientIndex}`} className="text-xs">
-                                    ปริมาณ {formIng.ingredientId && `(${getIngredientUnit(formIng.ingredientId)})`}
-                                  </Label>
-                                  <Input
-                                    id={`amount-${recipeIndex}-${ingredientIndex}`}
-                                    type="number"
-                                    value={formIng.amount}
-                                    onChange={(e) => handleIngredientChange(recipeIndex, ingredientIndex, 'amount', e.target.value)}
-                                    placeholder="0"
-                                    min="0"
-                                    step="0.01"
-                                  />
-                                </div>
-
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => removeIngredient(recipeIndex, ingredientIndex)}
-                                  disabled={recipe.ingredients.length === 1}
-                                  className="mb-0.5"
-                                >
-                                  <svg className="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                  </svg>
-                                </Button>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              <DialogFooter>
-                <DialogClose asChild>
-                  <Button type="button" variant="outline">
-                    ยกเลิก
-                  </Button>
-                </DialogClose>
-                <Button onClick={handleSubmit}>บันทึก</Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+          <Button className="flex items-center gap-2" onClick={() => setIsAddOpen(true)}>
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            เพิ่มเมนู
+          </Button>
         </div>
       </div>
 
@@ -510,7 +285,7 @@ export default function MenuList() {
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
                 <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">ชื่อเมนู</th>
-                <th className="px-6 py-4 text-center text-sm font-semibold text-gray-700">ระดับความหวาน</th>
+                <th className="px-6 py-4 text-center text-sm font-semibold text-gray-700">สูตร</th>
                 <th className="px-6 py-4 text-right text-sm font-semibold text-gray-700">ราคา</th>
                 <th className="px-6 py-4 text-center text-sm font-semibold text-gray-700">จัดการ</th>
               </tr>
@@ -531,18 +306,8 @@ export default function MenuList() {
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex items-center justify-center gap-2">
-                      <Button
-                        variant="secondary"
-                        onClick={(e) => openEdit(item, e)}
-                      >
-                        แก้ไข
-                      </Button>
-                      <Button
-                        variant="destructive"
-                        onClick={(e) => openDelete(item, e)}
-                      >
-                        ลบ
-                      </Button>
+                      <Button variant="secondary" onClick={(e) => openEdit(item, e)}>แก้ไข</Button>
+                      <Button variant="destructive" onClick={(e) => openDelete(item, e)}>ลบ</Button>
                     </div>
                   </td>
                 </tr>
@@ -557,9 +322,7 @@ export default function MenuList() {
         <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{selectedItem?.name}</DialogTitle>
-            <DialogDescription>
-              รายละเอียดสูตรและส่วนผสม
-            </DialogDescription>
+            <DialogDescription>รายละเอียดสูตรและส่วนผสม</DialogDescription>
           </DialogHeader>
 
           {selectedItem && (
@@ -569,10 +332,8 @@ export default function MenuList() {
                 <p className="text-2xl font-bold text-blue-700">{selectedItem.price} บาท</p>
               </div>
 
-              {/* All Recipes */}
               <div className="space-y-4">
                 <h3 className="font-semibold text-gray-800">สูตรทั้งหมด ({selectedItem.recipe.length})</h3>
-
                 {selectedItem.recipe.map((recipe, idx) => (
                   <div key={recipe.id} className="border rounded-lg p-4 bg-gray-50">
                     <div className="flex justify-between items-center mb-3">
@@ -584,21 +345,18 @@ export default function MenuList() {
 
                     <div className="space-y-2">
                       <p className="text-sm font-medium text-gray-600 mb-2">ส่วนผสม:</p>
-                      {recipe.ingredients.map((recipeIng) => (
-                        <div
-                          key={recipeIng.id}
-                          className="flex justify-between items-center p-3 bg-white rounded-lg border border-gray-200"
-                        >
+                      {recipe.ingredients.map((ri) => (
+                        <div key={ri.id} className="flex justify-between items-center p-3 bg-white rounded-lg border border-gray-200">
                           <div>
-                            <p className="font-medium text-gray-800">{recipeIng.ingredient.name}</p>
+                            <p className="font-medium text-gray-800">{ri.ingredient.name}</p>
                             <p className="text-xs text-gray-500">
-                              คงเหลือ: {recipeIng.ingredient.stockQty} {recipeIng.ingredient.unit}
-                              {recipeIng.ingredient.location && ` • ${recipeIng.ingredient.location.location}`}
+                              คงเหลือ: {ri.ingredient.stockQty} {ri.ingredient.unit}
+                              {ri.ingredient.location && ` • ${ri.ingredient.location.location}`}
                             </p>
                           </div>
                           <div className="text-right">
                             <p className="font-bold text-blue-600">
-                              {recipeIng.ingredientAmount} {recipeIng.ingredient.unit}
+                              {ri.ingredientAmount} {ri.ingredient.unit}
                             </p>
                           </div>
                         </div>
@@ -618,58 +376,151 @@ export default function MenuList() {
         </DialogContent>
       </Dialog>
 
-      {/* Edit Dialog */}
+      {/* Edit Dialog (แก้ไขสูตร/ส่วนผสมได้) */}
       <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
-        <DialogContent className="sm:max-w-[520px]">
+        <DialogContent className="sm:max-w-[760px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-2xl">แก้ไขเมนู</DialogTitle>
-            <DialogDescription>
-              ปรับชื่อและราคา ระบบจะคงสูตร/ส่วนผสมเดิมไว้โดยอัตโนมัติ
-            </DialogDescription>
+            <DialogDescription>ปรับชื่อ ราคา และสูตร/ส่วนผสมได้โดยตรง</DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 py-2">
-            <div className="grid gap-2">
-              <Label htmlFor="editName">ชื่อเมนู</Label>
-              <Input
-                id="editName"
-                value={editName}
-                onChange={(e) => setEditName(e.target.value)}
-                placeholder="เช่น Americano"
-              />
-            </div>
-
-            <div className="grid gap-2">
-              <Label htmlFor="editPrice">ราคา (บาท)</Label>
-              <Input
-                id="editPrice"
-                type="number"
-                min="0"
-                step="1"
-                value={editPrice}
-                onChange={(e) => setEditPrice(e.target.value)}
-                placeholder="เช่น 50"
-              />
-            </div>
-
-            {editTarget && (
-              <div className="text-xs text-gray-500 mt-1">
-                สูตรทั้งหมด: {editTarget.recipe.length} สูตร — ระบบจะส่งสูตรเดิมกลับไปกับคำขออัปเดต
+          <div className="grid gap-6 py-2">
+            {/* ชื่อ/ราคา */}
+            <div className="grid md:grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="editName">ชื่อเมนู</Label>
+                <Input id="editName" value={editName} onChange={(e) => setEditName(e.target.value)} />
               </div>
-            )}
+              <div className="grid gap-2">
+                <Label htmlFor="editPrice">ราคา (บาท)</Label>
+                <Input
+                  id="editPrice"
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={editPrice}
+                  onChange={(e) => setEditPrice(e.target.value)}
+                />
+              </div>
+            </div>
+
+            {/* สูตร */}
+            <div className="border-t pt-4">
+              <div className="flex justify-between items-center mb-4">
+                <Label className="text-lg font-bold">สูตร</Label>
+                <Button type="button" variant="outline" onClick={addRecipe}>
+                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  เพิ่มสูตร
+                </Button>
+              </div>
+
+              <div className="space-y-6">
+                {editRecipes.map((recipe, rIdx) => (
+                  <div key={rIdx} className="p-4 border rounded-lg bg-gray-50">
+                    <div className="flex justify-between items-center mb-3">
+                      <h4 className="font-semibold text-gray-700">สูตรที่ {rIdx + 1}</h4>
+                      <div className="flex items-center gap-2">
+                        {editRecipes.length > 1 && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => removeRecipe(rIdx)}
+                            className="text-red-500 hover:text-red-700"
+                          >
+                            ลบสูตร
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* ชื่อสูตร (พิมพ์เอง) */}
+                    <div className="grid gap-2 mb-4">
+                      <Label htmlFor={`recipe-name-${rIdx}`}>ชื่อสูตร</Label>
+                      <Input
+                        id={`recipe-name-${rIdx}`}
+                        value={recipe.sweetLevel}
+                        onChange={(e) => changeRecipeName(rIdx, e.target.value)}
+                        placeholder="เช่น หวานน้อย, หวานกลาง, ไม่หวาน หรือชื่อสูตรอื่นๆ"
+                      />
+                    </div>
+
+                    {/* ส่วนผสม */}
+                    <div>
+                      <div className="flex justify-between items-center mb-2">
+                        <Label className="text-sm font-semibold">ส่วนผสม</Label>
+                        <Button type="button" variant="outline" size="sm" onClick={() => addIngredientToRecipe(rIdx)}>
+                          <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                          </svg>
+                          เพิ่มวัตถุดิบ
+                        </Button>
+                      </div>
+
+                      <div className="space-y-3">
+                        {recipe.ingredients.map((ing, iIdx) => (
+                          <div key={iIdx} className="flex gap-2 items-end">
+                            <div className="flex-1 grid gap-2">
+                              <Label className="text-xs">วัตถุดิบ</Label>
+                              <Select
+                                value={ing.ingredientId}
+                                onValueChange={(v) => changeIngredientField(rIdx, iIdx, 'ingredientId', v)}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue placeholder="เลือกวัตถุดิบ" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {ingredients.map((opt) => (
+                                    <SelectItem key={opt.id} value={String(opt.id)}>
+                                      {opt.name} (คงเหลือ: {opt.stockQty} {opt.unit})
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+
+                            <div className="w-36 grid gap-2">
+                              <Label className="text-xs">
+                                ปริมาณ {ing.ingredientId && `(${getIngredientUnit(ing.ingredientId)})`}
+                              </Label>
+                              <Input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                value={ing.amount}
+                                onChange={(e) => changeIngredientField(rIdx, iIdx, 'amount', e.target.value)}
+                                placeholder="0"
+                              />
+                            </div>
+
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => removeIngredientFromRecipe(rIdx, iIdx)}
+                              disabled={recipe.ingredients.length === 1}
+                            >
+                              <svg className="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
 
           <DialogFooter>
             <DialogClose asChild>
-              <Button type="button" variant="outline" disabled={isSaving}>
-                ยกเลิก
-              </Button>
+              <Button type="button" variant="outline" disabled={isSaving}>ยกเลิก</Button>
             </DialogClose>
-            <Button
-              onClick={saveEdit}
-              disabled={isSaving}
-              className="bg-blue-600 hover:bg-blue-700"
-            >
+            <Button onClick={saveEdit} disabled={isSaving} >
               {isSaving ? 'กำลังบันทึก...' : 'บันทึก'}
             </Button>
           </DialogFooter>
@@ -700,20 +551,22 @@ export default function MenuList() {
 
           <DialogFooter>
             <DialogClose asChild>
-              <Button type="button" variant="outline" disabled={isDeleting}>
-                ยกเลิก
-              </Button>
+              <Button type="button" variant="outline" disabled={isDeleting}>ยกเลิก</Button>
             </DialogClose>
-            <Button
-              onClick={confirmDelete}
-              disabled={isDeleting}
-              className="bg-red-600 hover:bg-red-700"
-            >
+            <Button onClick={confirmDelete} disabled={isDeleting} className="bg-red-600 hover:bg-red-700">
               {isDeleting ? 'กำลังลบ...' : 'ลบเมนู'}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Create Menu Dialog Component (ของเดิม) */}
+      <DialogCreateMenu
+        open={isAddOpen}
+        onOpenChange={setIsAddOpen}
+        ingredients={ingredients}
+        onCreated={(menu) => setItems(prev => [...prev, menu])}
+      />
     </div>
   );
 }

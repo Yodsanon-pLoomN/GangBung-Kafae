@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Ingredient, CreateIngredientRequest, Location as LocationType } from '@/lib/data';
+import { Ingredient, CreateIngredientRequest } from '@/lib/data';
 import api from '@/lib/api';
 import { Button } from "@/components/ui/button";
 import {
@@ -26,169 +26,159 @@ import {
 
 export default function StockList() {
   const [items, setItems] = useState<Ingredient[]>([]);
-  const [isOpen, setIsOpen] = useState(false); // add dialog
   const [isLoading, setIsLoading] = useState(true);
 
-  // --- Add form state ---
-  const [formData, setFormData] = useState({
-    name: '',
-    stockQty: '',
-    unit: 'ml',
-    location: ''
-  });
+  // Add dialog
+  const [isAddOpen, setIsAddOpen] = useState(false);
+  const [addForm, setAddForm] = useState({ name: '', stockQty: '', unit: 'ml', location: '' });
 
-  // --- Edit dialog state ---
+  // Refill dialog
+  const [isRefillOpen, setIsRefillOpen] = useState(false);
+  const [refillTarget, setRefillTarget] = useState<Ingredient | null>(null);
+  const [refillAmount, setRefillAmount] = useState<string>('0');
+  const [isRefilling, setIsRefilling] = useState(false);
+
+  // Edit dialog
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<Ingredient | null>(null);
-  const [editName, setEditName] = useState('');
-  const [editQty, setEditQty] = useState<string>('0');
-  const [editUnit, setEditUnit] = useState('ml');
-  const [editLocation, setEditLocation] = useState<string>('');
-  const [isSaving, setIsSaving] = useState(false);
+  const [editForm, setEditForm] = useState({ name: '', stockQty: '', unit: 'ml', location: '' });
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
 
-  // --- Delete dialog state ---
+  // Delete dialog
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Ingredient | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const fetchData = async () => {
+  useEffect(() => {
+    refresh();
+  }, []);
+
+  const refresh = async () => {
     try {
       setIsLoading(true);
       const response = await api.get('/api/gangbung/ingredients');
-
-      console.log('API Response:', response.data);
-
       const data = Array.isArray(response.data)
         ? response.data
         : (response.data.items || response.data.data || []);
-
       setItems(data);
-    } catch (error) {
-      console.error('Error fetching data:', error);
+    } catch (e) {
+      console.error(e);
       setItems([]);
     } finally {
       setIsLoading(false);
     }
   };
 
-  useEffect(() => {
-    fetchData();
-  }, []);
-
   /* ---------------- Add (POST) ---------------- */
-
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleAddSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
     try {
-      const requestBody: CreateIngredientRequest = {
-        name: formData.name.trim(),
-        stockQty: parseFloat(formData.stockQty || '0'),
-        unit: formData.unit
+      const payload: CreateIngredientRequest = {
+        name: addForm.name.trim(),
+        stockQty: parseFloat(addForm.stockQty || '0'),
+        unit: addForm.unit,
       };
-
-      if (formData.location.trim()) {
-        requestBody.location = { location: formData.location.trim() };
+      if (addForm.location.trim()) {
+        payload.location = { location: addForm.location.trim() };
       }
 
-      const response = await api.post('/api/gangbung/ingredient', requestBody);
-
-      const newItem: Ingredient = Array.isArray(response.data)
-        ? response.data[0]
-        : response.data;
-
+      const res = await api.post('/api/gangbung/ingredient', payload);
+      const newItem: Ingredient = Array.isArray(res.data) ? res.data[0] : res.data;
       setItems(prev => [...prev, newItem]);
 
-      // Reset form and close dialog
-      setFormData({ name: '', stockQty: '', unit: 'ml', location: '' });
-      setIsOpen(false);
-    } catch (error) {
-      console.error('Error adding ingredient:', error);
+      setAddForm({ name: '', stockQty: '', unit: 'ml', location: '' });
+      setIsAddOpen(false);
+    } catch (e) {
+      console.error(e);
       alert('เกิดข้อผิดพลาดในการเพิ่มวัตถุดิบ');
     }
   };
 
-  /* ---------------- Edit (PUT) ---------------- */
+  /* ---------------- Refill (PUT) ---------------- */
+  const openRefill = (ing: Ingredient) => {
+    setRefillTarget(ing);
+    setRefillAmount('0');
+    setIsRefillOpen(true);
+  };
 
+  const quickAdd = (n: number) => {
+    setRefillAmount(v => String(parseFloat(v || '0') + n));
+  };
+
+  const confirmRefill = async () => {
+    if (!refillTarget) return;
+    const add = parseFloat(refillAmount || '0');
+    if (isNaN(add) || add <= 0) {
+      alert('กรุณากรอกจำนวนที่จะเติม (> 0)');
+      return;
+    }
+
+    const updated: Ingredient = {
+      ...refillTarget,
+      stockQty: (refillTarget.stockQty || 0) + add,
+    };
+
+    setIsRefilling(true);
+    try {
+      const res = await api.put(`/api/gangbung/ingredient/${refillTarget.id}`, updated);
+      const saved: Ingredient = Array.isArray(res.data) ? res.data[0] : res.data;
+      setItems(prev => prev.map(i => (i.id === saved.id ? saved : i)));
+      setIsRefillOpen(false);
+      setRefillTarget(null);
+      setRefillAmount('0');
+    } catch (e) {
+      console.error('Refill failed', e);
+      alert('เติมสต๊อกไม่สำเร็จ');
+    } finally {
+      setIsRefilling(false);
+    }
+  };
+
+  /* ---------------- Edit (PUT) ---------------- */
   const openEdit = (ing: Ingredient) => {
     setEditTarget(ing);
-    setEditName(ing.name);
-    setEditQty(String(ing.stockQty ?? 0));
-    setEditUnit(ing.unit);
-    setEditLocation(ing.location?.location ?? '');
+    setEditForm({
+      name: ing.name,
+      stockQty: String(ing.stockQty ?? 0),
+      unit: ing.unit,
+      location: ing.location?.location || '',
+    });
     setIsEditOpen(true);
   };
 
-  // สร้าง payload สำหรับ PUT โดยส่งโครง Ingredient ทั้งตัว (ตามที่ backend รับ new Ingredient ใน controller)
-  const buildPutPayload = (
-    base: Ingredient,
-    name: string,
-    qty: number,
-    unit: string,
-    locationText: string
-  ): Ingredient => {
-    let loc: LocationType | null | undefined = null;
-
-    if (locationText.trim()) {
-      // ถ้ามี location เดิม มี id ก็ส่งกลับไปด้วย (ช่วย backend map เดิมได้)
-      if (base.location?.id) {
-        loc = { id: base.location.id, location: locationText.trim() };
-      } else {
-        loc = { id: 0 as unknown as number, location: locationText.trim() }; // id ไม่สำคัญ ถ้า backend ignore ก็โอเค
-      }
-    } else {
-      loc = null; // ล้างตำแหน่งเก็บ
-    }
-
-    return {
-      ...base,
-      name: name.trim(),
-      stockQty: qty,
-      unit,
-      location: loc ?? null
-    };
-  };
-
-  const saveEdit = async () => {
+  const confirmEdit = async () => {
     if (!editTarget) return;
 
-    const qtyNum = Number(editQty);
-    if (!editName.trim()) {
-      alert('กรุณากรอกชื่อวัตถุดิบ');
-      return;
-    }
-    if (Number.isNaN(qtyNum) || qtyNum < 0) {
-      alert('จำนวนสต๊อกต้องเป็นตัวเลขและไม่ติดลบ');
-      return;
-    }
-    if (!editUnit) {
-      alert('กรุณาเลือกหน่วย');
-      return;
-    }
+    const stock = parseFloat(editForm.stockQty || '0');
+    if (!editForm.name.trim()) return alert('กรุณากรอกชื่อวัตถุดิบ');
+    if (isNaN(stock) || stock < 0) return alert('จำนวนสต๊อกต้องเป็นตัวเลขและไม่ติดลบ');
 
-    setIsSaving(true);
+    const payload: Ingredient = {
+      id: editTarget.id,
+      name: editForm.name.trim(),
+      stockQty: stock,
+      unit: editForm.unit,
+      location: editForm.location.trim()
+        ? { id: editTarget.location?.id ?? 0, location: editForm.location.trim() }
+        : null,
+    };
+
+    setIsSavingEdit(true);
     try {
-      const body = buildPutPayload(editTarget, editName, qtyNum, editUnit, editLocation);
-
-      // PUT /ingredient/{id}
-      const res = await api.put(`/api/gangbung/ingredient/${editTarget.id}`, body);
-
-      // ใช้ค่าตอบกลับจาก backend (ถ้ามี) อัปเดต state
-      const updated: Ingredient = res.data ?? body;
-      setItems(prev => prev.map(it => (it.id === updated.id ? updated : it)));
-
+      const res = await api.put(`/api/gangbung/ingredient/${editTarget.id}`, payload);
+      const saved: Ingredient = Array.isArray(res.data) ? res.data[0] : res.data;
+      setItems(prev => prev.map(i => (i.id === saved.id ? saved : i)));
       setIsEditOpen(false);
       setEditTarget(null);
     } catch (e) {
-      console.error('Update ingredient failed', e);
+      console.error('Edit failed', e);
       alert('แก้ไขวัตถุดิบไม่สำเร็จ');
     } finally {
-      setIsSaving(false);
+      setIsSavingEdit(false);
     }
   };
 
   /* ---------------- Delete (DELETE) ---------------- */
-
   const openDelete = (ing: Ingredient) => {
     setDeleteTarget(ing);
     setIsDeleteOpen(true);
@@ -199,44 +189,26 @@ export default function StockList() {
     setIsDeleting(true);
     try {
       await api.delete(`/api/gangbung/ingredient/${deleteTarget.id}`);
-      setItems(prev => prev.filter(it => it.id !== deleteTarget.id));
+      setItems(prev => prev.filter(i => i.id !== deleteTarget.id));
       setIsDeleteOpen(false);
       setDeleteTarget(null);
     } catch (e) {
-      console.error('Delete ingredient failed', e);
-      alert('ลบวัตถุดิบไม่สำเร็จ อาจมีการอ้างอิงในเมนู/ออเดอร์');
+      console.error('Delete failed', e);
+      alert('ลบวัตถุดิบไม่สำเร็จ');
     } finally {
       setIsDeleting(false);
     }
   };
 
-  /* ---------------- UI ---------------- */
-
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value
-    });
-  };
-
-  const handleUnitChange = (value: string) => {
-    setFormData({
-      ...formData,
-      unit: value
-    });
-  };
-
   return (
     <div className="p-6 overflow-y-auto">
+      {/* Header */}
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-bold text-gray-800">วัตถุดิบ</h2>
-
         <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={fetchData}>
-            รีเฟรช
-          </Button>
-
-          <Dialog open={isOpen} onOpenChange={setIsOpen}>
+          <Button variant="outline" onClick={refresh}>รีเฟรช</Button>
+          {/* Add Ingredient */}
+          <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
             <DialogTrigger asChild>
               <Button className="flex items-center gap-2">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -253,19 +225,15 @@ export default function StockList() {
                 </DialogDescription>
               </DialogHeader>
 
-              <form
-                onSubmit={handleSubmit}
-                className="grid gap-4 py-4"
-              >
+              <div className="grid gap-4 py-4">
                 <div className="grid gap-3">
                   <Label htmlFor="name">ชื่อวัตถุดิบ</Label>
                   <Input
                     id="name"
                     name="name"
-                    value={formData.name}
-                    onChange={handleInputChange}
+                    value={addForm.name}
+                    onChange={(e) => setAddForm(s => ({ ...s, name: e.target.value }))}
                     placeholder="เช่น นม, น้ำตาล"
-                    required
                   />
                 </div>
 
@@ -275,18 +243,17 @@ export default function StockList() {
                     id="stockQty"
                     name="stockQty"
                     type="number"
-                    value={formData.stockQty}
-                    onChange={handleInputChange}
+                    value={addForm.stockQty}
+                    onChange={(e) => setAddForm(s => ({ ...s, stockQty: e.target.value }))}
                     placeholder="0"
                     min="0"
                     step="0.01"
-                    required
                   />
                 </div>
 
                 <div className="grid gap-3">
                   <Label htmlFor="unit">หน่วย</Label>
-                  <Select value={formData.unit} onValueChange={handleUnitChange}>
+                  <Select value={addForm.unit} onValueChange={(v) => setAddForm(s => ({ ...s, unit: v }))}>
                     <SelectTrigger>
                       <SelectValue placeholder="เลือกหน่วย" />
                     </SelectTrigger>
@@ -306,26 +273,25 @@ export default function StockList() {
                   <Input
                     id="location"
                     name="location"
-                    value={formData.location}
-                    onChange={handleInputChange}
+                    value={addForm.location}
+                    onChange={(e) => setAddForm(s => ({ ...s, location: e.target.value }))}
                     placeholder="เช่น ตู้เย็น, ชั้นวาง"
                   />
                 </div>
+              </div>
 
-                <DialogFooter>
-                  <DialogClose asChild>
-                    <Button type="button" variant="outline">
-                      ยกเลิก
-                    </Button>
-                  </DialogClose>
-                  <Button type="submit">บันทึก</Button>
-                </DialogFooter>
-              </form>
+              <DialogFooter>
+                <DialogClose asChild>
+                  <Button type="button" variant="outline">ยกเลิก</Button>
+                </DialogClose>
+                <Button onClick={handleAddSubmit}>บันทึก</Button>
+              </DialogFooter>
             </DialogContent>
           </Dialog>
         </div>
       </div>
 
+      {/* Table */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200">
         {isLoading ? (
           <div className="p-8 text-center text-gray-500">กำลังโหลด...</div>
@@ -355,12 +321,23 @@ export default function StockList() {
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex items-center justify-center gap-2">
+                      {/* เติม */}
+                      <Button
+                        className="bg-green-600 hover:bg-green-700"
+                        onClick={() => openRefill(item)}
+                      >
+                        เติม
+                      </Button>
+
+                      {/* แก้ไข */}
                       <Button
                         variant="secondary"
                         onClick={() => openEdit(item)}
                       >
                         แก้ไข
                       </Button>
+
+                      {/* ลบ */}
                       <Button
                         variant="destructive"
                         onClick={() => openDelete(item)}
@@ -376,43 +353,91 @@ export default function StockList() {
         )}
       </div>
 
-      {/* Edit Dialog */}
-      <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
-        <DialogContent className="sm:max-w-[480px]">
+      {/* Refill Dialog */}
+      <Dialog open={isRefillOpen} onOpenChange={setIsRefillOpen}>
+        <DialogContent className="sm:max-w-[420px]">
           <DialogHeader>
-            <DialogTitle className="text-2xl">แก้ไขวัตถุดิบ</DialogTitle>
-            <DialogDescription>
-              ปรับชื่อ จำนวน หน่วย และตำแหน่งเก็บ จากนั้นบันทึกเพื่ออัปเดตฐานข้อมูล
-            </DialogDescription>
+            <DialogTitle className="text-2xl">เติมสต๊อก</DialogTitle>
+            <DialogDescription>ระบุจำนวนที่ต้องการเติมให้กับวัตถุดิบ</DialogDescription>
           </DialogHeader>
 
-          <div className="grid gap-4 py-2">
-            <div className="grid gap-2">
+          {refillTarget && (
+            <div className="space-y-4">
+              <div className="p-3 rounded-lg bg-blue-50 text-sm text-blue-900">
+                <div className="font-semibold">{refillTarget.name}</div>
+                <div className="mt-1">
+                  คงเหลือปัจจุบัน: <b>{refillTarget.stockQty.toLocaleString()} {refillTarget.unit}</b>
+                  {refillTarget.location ? ` • ${refillTarget.location.location}` : ''}
+                </div>
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="refillAmount">จำนวนที่จะเติม ({refillTarget.unit})</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="refillAmount"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={refillAmount}
+                    onChange={(e) => setRefillAmount(e.target.value)}
+                    placeholder="0"
+                  />
+                  <div className="flex gap-1">
+                    <Button type="button" variant="outline" onClick={() => quickAdd(10)}>+10</Button>
+                    <Button type="button" variant="outline" onClick={() => quickAdd(50)}>+50</Button>
+                    <Button type="button" variant="outline" onClick={() => quickAdd(100)}>+100</Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button type="button" variant="outline" disabled={isRefilling}>ยกเลิก</Button>
+            </DialogClose>
+            <Button onClick={confirmRefill} disabled={isRefilling} className="bg-green-600 hover:bg-green-700">
+              {isRefilling ? 'กำลังบันทึก...' : 'ยืนยันการเติม'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Dialog */}
+      <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+        <DialogContent className="sm:max-w-[520px]">
+          <DialogHeader>
+            <DialogTitle className="text-2xl">แก้ไขวัตถุดิบ</DialogTitle>
+            <DialogDescription>ปรับชื่อ หน่วย ตำแหน่งเก็บ และจำนวนคงเหลือ</DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="grid gap-3">
               <Label htmlFor="editName">ชื่อวัตถุดิบ</Label>
               <Input
                 id="editName"
-                value={editName}
-                onChange={(e) => setEditName(e.target.value)}
-                placeholder="เช่น นม"
+                value={editForm.name}
+                onChange={(e) => setEditForm(s => ({ ...s, name: e.target.value }))}
               />
             </div>
 
-            <div className="grid gap-2">
-              <Label htmlFor="editQty">จำนวนสต๊อก</Label>
+            <div className="grid gap-3">
+              <Label htmlFor="editStock">จำนวนสต๊อก</Label>
               <Input
-                id="editQty"
+                id="editStock"
                 type="number"
                 min="0"
                 step="0.01"
-                value={editQty}
-                onChange={(e) => setEditQty(e.target.value)}
+                value={editForm.stockQty}
+                onChange={(e) => setEditForm(s => ({ ...s, stockQty: e.target.value }))}
               />
             </div>
 
-            <div className="grid gap-2">
+            <div className="grid gap-3">
               <Label htmlFor="editUnit">หน่วย</Label>
-              <Select value={editUnit} onValueChange={(v) => setEditUnit(v)}>
-                <SelectTrigger>
+              <Select value={editForm.unit} onValueChange={(v) => setEditForm(s => ({ ...s, unit: v }))}>
+                <SelectTrigger id="editUnit">
                   <SelectValue placeholder="เลือกหน่วย" />
                 </SelectTrigger>
                 <SelectContent>
@@ -426,12 +451,12 @@ export default function StockList() {
               </Select>
             </div>
 
-            <div className="grid gap-2">
-              <Label htmlFor="editLocation">ตำแหน่งเก็บ</Label>
+            <div className="grid gap-3">
+              <Label htmlFor="editLoc">ตำแหน่งเก็บ</Label>
               <Input
-                id="editLocation"
-                value={editLocation}
-                onChange={(e) => setEditLocation(e.target.value)}
+                id="editLoc"
+                value={editForm.location}
+                onChange={(e) => setEditForm(s => ({ ...s, location: e.target.value }))}
                 placeholder="เช่น ตู้เย็น, ชั้นวาง"
               />
             </div>
@@ -439,12 +464,10 @@ export default function StockList() {
 
           <DialogFooter>
             <DialogClose asChild>
-              <Button type="button" variant="outline" disabled={isSaving}>
-                ยกเลิก
-              </Button>
+              <Button type="button" variant="outline" disabled={isSavingEdit}>ยกเลิก</Button>
             </DialogClose>
-            <Button onClick={saveEdit} disabled={isSaving} className="bg-blue-600 hover:bg-blue-700">
-              {isSaving ? 'กำลังบันทึก...' : 'บันทึก'}
+            <Button onClick={confirmEdit} disabled={isSavingEdit} className="bg-blue-600 hover:bg-blue-700">
+              {isSavingEdit ? 'กำลังบันทึก...' : 'บันทึก'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -452,31 +475,27 @@ export default function StockList() {
 
       {/* Delete Dialog */}
       <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
-        <DialogContent className="sm:max-w-[460px]">
+        <DialogContent className="sm:max-w-[480px]">
           <DialogHeader>
             <DialogTitle className="text-2xl text-red-700">ลบวัตถุดิบ</DialogTitle>
-            <DialogDescription>
-              ยืนยันการลบวัตถุดิบนี้ การลบอาจไม่สำเร็จหากถูกอ้างอิงในเมนู/ออเดอร์
-            </DialogDescription>
+            <DialogDescription>การลบไม่สามารถย้อนกลับได้</DialogDescription>
           </DialogHeader>
 
           <div className="p-4 bg-red-50 rounded-lg border border-red-200">
             {deleteTarget ? (
               <div className="text-sm">
                 <div><span className="font-semibold">ชื่อ: </span>{deleteTarget.name}</div>
-                <div><span className="font-semibold">สต๊อก: </span>{deleteTarget.stockQty.toLocaleString()} {deleteTarget.unit}</div>
-                <div><span className="font-semibold">ตำแหน่งเก็บ: </span>{deleteTarget.location?.location ?? '-'}</div>
+                <div><span className="font-semibold">สต๊อก: </span>{deleteTarget.stockQty} {deleteTarget.unit}</div>
+                <div><span className="font-semibold">ตำแหน่ง: </span>{deleteTarget.location?.location ?? '-'}</div>
               </div>
             ) : (
-              <div className="text-sm">ไม่พบข้อมูลวัตถุดิบ</div>
+              <div className="text-sm">ไม่พบวัตถุดิบ</div>
             )}
           </div>
 
           <DialogFooter>
             <DialogClose asChild>
-              <Button type="button" variant="outline" disabled={isDeleting}>
-                ยกเลิก
-              </Button>
+              <Button type="button" variant="outline" disabled={isDeleting}>ยกเลิก</Button>
             </DialogClose>
             <Button onClick={confirmDelete} disabled={isDeleting} className="bg-red-600 hover:bg-red-700">
               {isDeleting ? 'กำลังลบ...' : 'ลบวัตถุดิบ'}

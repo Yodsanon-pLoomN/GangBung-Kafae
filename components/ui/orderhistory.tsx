@@ -146,9 +146,7 @@ export default function OrderHistory() {
               >
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-3">
-                    <div className="flex items-center justify-center w-10 h-10 bg-blue-100 rounded-full">
-                      <span className="text-blue-700 font-semibold">#{order.id}</span>
-                    </div>
+                  
                     <div>
                       <h3 className="font-semibold text-gray-800">
                         ออเดอร์ #{order.id}
